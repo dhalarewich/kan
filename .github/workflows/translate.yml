@@ -1,8 +1,9 @@
 name: Translate
 
 on:
-  push:
-    branches: [main]
+  # Disabled in this fork — Translate needs LINGODOTDEV_API_KEY which only
+  # upstream has. Translations stay synced via periodic upstream merges.
+  workflow_dispatch:
 
 permissions:
   contents: write
