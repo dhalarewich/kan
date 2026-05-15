@@ -186,3 +186,19 @@ jobs:
           TAGS: ${{ steps.meta-migrate.outputs.tags }}
           DIGEST: ${{ steps.build-and-push-migrate.outputs.digest }}
         run: echo "${TAGS}" | xargs -I {} cosign sign --yes {}@${DIGEST}
+
+      # Fork-specific: trigger an instant Railway redeploy after :edge ships.
+      # Railway also has image auto-update enabled as a polling safety net
+      # (every ~30 min); this just removes the wait. Skipped when the secret
+      # isn't set (PRs, external forks).
+      - name: Trigger Railway redeploy
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN not set, skipping redeploy"
+            exit 0
+          fi
+          npm i -g @railway/cli
+          railway redeploy --service Web --yes
