@@ -43,6 +43,8 @@ import {
 import { twMerge } from "tailwind-merge";
 import tippy from "tippy.js";
 import { Markdown } from "tiptap-markdown";
+import { DOMParser as PMDOMParser } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 import { getAvatarUrl } from "~/utils/helpers";
 import Avatar from "./Avatar";
@@ -55,6 +57,55 @@ declare module "@tiptap/core" {
     };
   }
 }
+
+// Intercepts paste events whose `text/plain` looks like markdown and routes them
+// through the markdown parser, even when the clipboard also carries `text/html`.
+// The base tiptap-markdown extension only acts on text-only clipboards — but
+// most sources (VS Code, Notes, Notion, Claude chat, GitHub) put HTML alongside
+// the text, which makes ProseMirror prefer the HTML path. This closes that gap.
+const MARKDOWN_SIGNALS = [
+  /^#{1,6}\s/m,              // ATX heading
+  /^[-*+]\s/m,               // unordered list
+  /^\d+\.\s/m,               // ordered list
+  /```/,                     // fenced code block
+  /\[[^\]]+\]\([^)]+\)/,     // [text](url)
+  /^\|.*\|/m,                // table row
+  /^>\s/m,                   // blockquote
+];
+
+const MarkdownPasteHandler = Extension.create({
+  name: "markdownPasteHandler",
+  priority: 1000,
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        key: new PluginKey("markdownPasteHandler"),
+        props: {
+          handlePaste(view, event) {
+            const text = event.clipboardData?.getData("text/plain") ?? "";
+            if (!text.trim()) return false;
+            if (!MARKDOWN_SIGNALS.some((re) => re.test(text))) return false;
+
+            const parser = editor.storage.markdown?.parser;
+            if (!parser) return false;
+
+            const html: string = parser.parse(text);
+            const doc = new window.DOMParser().parseFromString(html, "text/html");
+            const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(
+              doc.body,
+              { preserveWhitespace: true },
+            );
+
+            view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
+            event.preventDefault();
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
 
 export interface SlashCommandItem {
   title: string;
@@ -475,6 +526,7 @@ export default function Editor({
           linkOnPaste: true,
         }),
         Markdown.configure({ transformPastedText: true }),
+        MarkdownPasteHandler,
         Placeholder.configure({
           placeholder: readOnly
             ? ""
