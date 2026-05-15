@@ -43,6 +43,14 @@ import {
   HiOutlineListBullet,
   HiOutlineNumberedList,
   HiOutlineStrikethrough,
+  HiOutlineTableCells,
+  HiOutlineTrash,
+  HiOutlineViewColumns,
+  HiOutlineBars3,
+  HiOutlineArrowDownOnSquare,
+  HiOutlineArrowUpOnSquare,
+  HiOutlineArrowLeftOnRectangle,
+  HiOutlineArrowRightOnRectangle,
 } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
 import tippy from "tippy.js";
@@ -488,6 +496,16 @@ const getCommandItems = (disableHeadings: boolean): SlashCommandItem[] => {
       icon: <HiOutlineCodeBracketSquare />,
       command: ({ editor }) => editor.chain().focus().toggleCodeBlock().run(),
     },
+    {
+      title: "Table",
+      icon: <HiOutlineTableCells />,
+      command: ({ editor }) =>
+        editor
+          .chain()
+          .focus()
+          .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+          .run(),
+    },
   ];
 };
 
@@ -672,6 +690,7 @@ export default function Editor({
         }
       `}</style>
       {!readOnly && editor && <EditorBubbleMenu editor={editor} />}
+      {!readOnly && editor && <TableBubbleMenu editor={editor} />}
       <EditorContent
         editor={editor}
         className="prose dark:prose-invert prose-sm max-w-none overflow-y-auto [&_blockquote]:!text-xs [&_h1]:!text-lg [&_h2]:!text-base [&_h3]:!text-sm [&_ol]:!text-xs [&_p.is-empty::before]:text-light-900 [&_p.is-empty::before]:dark:text-dark-800 [&_p]:!text-sm [&_p]:text-light-950 [&_p]:dark:text-dark-950 [&_ul]:!text-xs"
@@ -714,7 +733,14 @@ function EditorBubbleMenu({ editor }: { editor: TiptapEditor | null }) {
     },
   ];
   return (
-    <BubbleMenu editor={editor}>
+    <BubbleMenu
+      editor={editor}
+      pluginKey="textBubbleMenu"
+      shouldShow={({ editor, state }) => {
+        if (editor.isActive("table")) return false;
+        return !state.selection.empty;
+      }}
+    >
       <div className="flex items-center gap-2 rounded-md border border-light-600 bg-light-50 p-1 dark:border-dark-600 dark:bg-dark-50">
         {bubbleMenuItems.map((item) => (
           <Button
@@ -724,6 +750,78 @@ function EditorBubbleMenu({ editor }: { editor: TiptapEditor | null }) {
               item.active && "bg-light-100 dark:bg-dark-400",
             )}
             title={`${item.title} [${item.keys.join(" + ").replace("meta", isMac ? "⌘" : "ctrl")}]`}
+            onClick={item.onClick}
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                item.onClick();
+              }
+            }}
+          >
+            {item.icon}
+          </Button>
+        ))}
+      </div>
+    </BubbleMenu>
+  );
+}
+
+function TableBubbleMenu({ editor }: { editor: TiptapEditor | null }) {
+  const tableMenuItems = [
+    {
+      title: "Add row above",
+      icon: <HiOutlineArrowUpOnSquare />,
+      onClick: () => editor?.chain().focus().addRowBefore().run(),
+    },
+    {
+      title: "Add row below",
+      icon: <HiOutlineArrowDownOnSquare />,
+      onClick: () => editor?.chain().focus().addRowAfter().run(),
+    },
+    {
+      title: "Add column left",
+      icon: <HiOutlineArrowLeftOnRectangle />,
+      onClick: () => editor?.chain().focus().addColumnBefore().run(),
+    },
+    {
+      title: "Add column right",
+      icon: <HiOutlineArrowRightOnRectangle />,
+      onClick: () => editor?.chain().focus().addColumnAfter().run(),
+    },
+    {
+      title: "Delete row",
+      icon: <HiOutlineBars3 />,
+      onClick: () => editor?.chain().focus().deleteRow().run(),
+    },
+    {
+      title: "Delete column",
+      icon: <HiOutlineViewColumns />,
+      onClick: () => editor?.chain().focus().deleteColumn().run(),
+    },
+    {
+      title: "Toggle header row",
+      icon: <HiOutlineTableCells />,
+      onClick: () => editor?.chain().focus().toggleHeaderRow().run(),
+    },
+    {
+      title: "Delete table",
+      icon: <HiOutlineTrash />,
+      onClick: () => editor?.chain().focus().deleteTable().run(),
+    },
+  ];
+  return (
+    <BubbleMenu
+      editor={editor}
+      pluginKey="tableBubbleMenu"
+      shouldShow={({ editor }) => editor.isActive("table")}
+    >
+      <div className="flex items-center gap-1 rounded-md border border-light-600 bg-light-50 p-1 dark:border-dark-600 dark:bg-dark-50">
+        {tableMenuItems.map((item) => (
+          <Button
+            key={item.title}
+            className="rounded p-1 text-light-900 focus:ring-2 focus:ring-light-600 dark:text-dark-900 dark:focus:ring-dark-600"
+            title={item.title}
             onClick={item.onClick}
             tabIndex={0}
             onKeyDown={(e) => {
